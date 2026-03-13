@@ -76,21 +76,46 @@ class LLMClient:
         return self._client
 
     def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Strip unsupported fields (annotations, status, etc.) for Groq/OpenRouter."""
-        allowed_assistant = {"role", "content", "tool_calls"}
-        allowed_tool = {"role", "content", "tool_call_id"}
-        allowed_user_system = {"role", "content"}
+        """Strip unsupported fields for Groq/OpenRouter. Remove None in tool_calls."""
         out = []
         for m in messages:
             role = m.get("role", "")
             if role == "assistant":
-                clean = {k: m[k] for k in allowed_assistant if k in m}
+                clean = {"role": "assistant"}
+                if m.get("content"):
+                    clean["content"] = m["content"]
+                else:
+                    clean["content"] = None
+                if m.get("tool_calls"):
+                    tcs = []
+                    for tc in m["tool_calls"]:
+                        if not isinstance(tc, dict):
+                            continue
+                        fn = tc.get("function", {})
+                        tcs.append({
+                            "id": tc.get("id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": fn.get("name", ""),
+                                "arguments": fn.get("arguments", "{}"),
+                            }
+                        })
+                    if tcs:
+                        clean["tool_calls"] = tcs
             elif role == "tool":
-                clean = {k: m[k] for k in allowed_tool if k in m}
+                clean = {
+                    "role": "tool",
+                    "tool_call_id": m.get("tool_call_id", ""),
+                    "content": str(m.get("content", "")),
+                }
+            elif role in ("user", "system"):
+                clean = {
+                    "role": role,
+                    "content": m.get("content", ""),
+                }
             else:
-                clean = {k: m[k] for k in allowed_user_system if k in m}
-            if clean:
-                out.append(clean)
+                continue
+            out.append(clean)
         return out
 
     def chat(
