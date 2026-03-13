@@ -19,6 +19,7 @@ Setup:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -278,6 +279,40 @@ async def handle_text(message: Message) -> None:
     await _process_message(message, message.text or "")
 
 
+def _extract_telegram_send_text(text: str) -> str | None:
+    """Если юзер просит отправить в телеграм — извлечь текст. Fallback когда модель не вызвала send_message."""
+    t = (text or "").strip().lower()
+    for prefix in ("отправь в телеграм:", "в телеграм:", "напиши в телеграм:", "send to telegram:", "в тг:"):
+        if prefix in t:
+            idx = text.lower().find(prefix) + len(prefix)
+            return text[idx:].strip()
+    return None
+
+
+def _get_last_telegram_content_from_history(data_root: Path) -> str | None:
+    """Из последнего сообщения юзера с 'в телеграм:' извлечь контент. Для 'прямо сейчас отправь'."""
+    chat_path = data_root / "logs" / "chat.jsonl"
+    if not chat_path.exists():
+        return None
+    try:
+        lines = [l for l in chat_path.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+        for line in reversed(lines):
+            try:
+                e = json.loads(line)
+                if str(e.get("direction", "")).lower() != "in":
+                    continue
+                txt = str(e.get("text", ""))
+                for prefix in ("отправь в телеграм:", "в телеграм:", "напиши в телеграм:"):
+                    if prefix in txt.lower():
+                        idx = txt.lower().find(prefix) + len(prefix)
+                        return txt[idx:].strip()
+            except json.JSONDecodeError:
+                continue
+    except Exception:
+        pass
+    return None
+
+
 async def _process_message(message: Message, user_text: str) -> None:
     agent = get_agent(message.chat.id)
 
@@ -288,8 +323,14 @@ async def _process_message(message: Message, user_text: str) -> None:
         reply = await loop.run_in_executor(None, agent.run, user_text)
 
         events = getattr(agent, "_last_pending_events", [])
+        sent_via_tool = False
         for evt in events:
-            if evt.get("type") == "send_file":
+            if evt.get("type") == "send_message":
+                sent_via_tool = True
+                text = evt.get("text", "")
+                if text:
+                    await send_long(message, text, reply_markup=main_keyboard())
+            elif evt.get("type") == "send_file":
                 path = FILES_DIR / evt.get("filename", "")
                 if path.exists():
                     data = path.read_bytes()
@@ -299,6 +340,18 @@ async def _process_message(message: Message, user_text: str) -> None:
                     log.info("Sent file: %s", path.name)
                 else:
                     await message.answer(f"⚠️ File not found: {path.name}")
+
+        # Fallback: модель не вызвала send_message, но юзер просил отправить
+        if not sent_via_tool:
+            to_send = _extract_telegram_send_text(user_text)
+            if not to_send:
+                # "прямо сейчас отправь" / "отправь" — взять из последнего сообщения с "в телеграм:"
+                t = (user_text or "").strip().lower()
+                if any(p in t for p in ("отправь", "send", "прямо сейчас")):
+                    to_send = _get_last_telegram_content_from_history(DATA_ROOT)
+            if to_send:
+                await send_long(message, to_send, reply_markup=main_keyboard())
+                log.info("Sent to Telegram (fallback): %s", to_send[:50])
 
         if reply:
             await send_long(message, reply, reply_markup=main_keyboard())

@@ -25,20 +25,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 import logging
 import os
 import secrets
 import sys
 from collections import deque
 from datetime import datetime
-from pathlib import Path
 from typing import AsyncGenerator
 
 PROJECT_ROOT = Path(__file__).parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import DATA_ROOT, PROJECT_ROOT as REPO_DIR, WEB_PASSWORD, WEB_PORT
+from config import (
+    DATA_ROOT,
+    PROJECT_ROOT as REPO_DIR,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_OWNER_CHAT_ID,
+    WEB_PASSWORD,
+    WEB_PORT,
+)
 from ouroboros.agent import Agent
 from ouroboros.voice import transcribe, synthesize
 
@@ -89,6 +96,47 @@ def push_tool(tool: str, status: str, result: str = "") -> None:
     entry = {"ts": datetime.now().strftime("%H:%M:%S"), "tool": tool, "status": status, "result": result[:200]}
     _tool_events.append(entry)
     _broadcast({"type": "tool", "data": entry})
+
+
+def _get_last_telegram_content(data_root: Path) -> str | None:
+    """Из последнего сообщения юзера с 'в телеграм:' извлечь контент."""
+    chat_path = data_root / "logs" / "chat.jsonl"
+    if not chat_path.exists():
+        return None
+    try:
+        lines = [l for l in chat_path.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+        for line in reversed(lines):
+            try:
+                e = json.loads(line)
+                if str(e.get("direction", "")).lower() != "in":
+                    continue
+                txt = str(e.get("text", ""))
+                for prefix in ("отправь в телеграм:", "в телеграм:", "напиши в телеграм:"):
+                    if prefix in txt.lower():
+                        idx = txt.lower().find(prefix) + len(prefix)
+                        return txt[idx:].strip()
+            except json.JSONDecodeError:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+async def _send_to_telegram(text: str) -> None:
+    """Отправить сообщение в Telegram владельцу (из Web UI)."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_OWNER_CHAT_ID:
+        return
+    try:
+        import aiohttp
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        async with aiohttp.ClientSession() as session:
+            await session.post(url, json={
+                "chat_id": TELEGRAM_OWNER_CHAT_ID.strip(),
+                "text": text[:4096],
+                "parse_mode": "HTML",
+            })
+    except Exception as e:
+        log.warning("Failed to send to Telegram: %s", e)
 
 
 def _broadcast(event: dict) -> None:
@@ -173,6 +221,26 @@ async def chat(req: ChatRequest, session: str = Depends(check_auth)):
             lambda: agent.run(req.message, emit_progress=on_progress),
         )
         push_log("INFO", f"Agent replied ({len(reply or '')} chars)")
+
+        # Отправить send_message в Telegram, если настроено
+        events = getattr(agent, "_last_pending_events", [])
+        to_telegram = None
+        for evt in events:
+            if evt.get("type") == "send_message":
+                to_telegram = evt.get("text", "")
+                break
+        # Fallback: модель не вызвала send_message
+        if not to_telegram:
+            msg = (req.message or "").lower()
+            for prefix in ("отправь в телеграм:", "в телеграм:", "напиши в телеграм:"):
+                if prefix in msg:
+                    idx = req.message.lower().find(prefix) + len(prefix)
+                    to_telegram = req.message[idx:].strip()
+                    break
+            if not to_telegram and any(p in msg for p in ("отправь", "send", "прямо сейчас")):
+                to_telegram = _get_last_telegram_content(DATA_ROOT)
+        if to_telegram and TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_CHAT_ID:
+            asyncio.create_task(_send_to_telegram(to_telegram))
         return {"reply": reply or ""}
     except Exception as exc:
         push_log("ERROR", f"Agent error: {exc}")

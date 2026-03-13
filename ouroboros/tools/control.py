@@ -47,15 +47,19 @@ def get_tools() -> list:
         }, _update_identity),
         ToolEntry("chat_history", {
             "name": "chat_history",
-            "description": "Get recent chat messages.",
-            "parameters": {"type": "object", "properties": {
-                "count": {"type": "integer", "default": 50},
-                "offset": {"type": "integer", "default": 0},
-            }, "required": []},
+            "description": "Get recent chat messages from memory. Use when you need to recall past conversation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer", "description": "Number of messages to return (default 50, max 100)"},
+                    "offset": {"type": "integer", "description": "Skip first N messages (default 0)"},
+                },
+                "required": [],
+            },
         }, _chat_history),
         ToolEntry("send_message", {
             "name": "send_message",
-            "description": "Send a message to the user.",
+            "description": "Send a proactive message to the user. In Telegram: delivers to the chat. In Web: delivers to owner's Telegram if TELEGRAM_OWNER_CHAT_ID is configured. Use when user asks to notify them in Telegram or send something there.",
             "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
         }, _send_message),
     ]

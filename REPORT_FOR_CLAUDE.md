@@ -1,149 +1,212 @@
-# Отчёт для Claude — VOR Personal AI Secretary
+# Полный отчёт для Claude — VOR Personal AI Secretary
 
 **Дата:** 2026-03-13  
+**Репозиторий:** https://github.com/mihelson777/VOR  
 **Проект:** VOR — само-создающийся AI-агент (личный секретарь)
 
 ---
 
-## Текущее состояние
+## 1. Обзор проекта
 
-### Работает
-- ✅ Web UI (http://127.0.0.1:8001) — логин, чат, Memory, Logs, Tools, 🎤 голос
-- ✅ Telegram bot (polling + webhook) — голосовые сообщения
-- ✅ API ключи: Groq (приоритет 1), OpenRouter (2), OpenAI (3)
-- ✅ Multi-agent Swarm: `spawn_agents` → Planner → Researcher/Coder/Critic → синтез
-- ✅ Инструменты: repo_*, data_*, web_search, fetch_url, shell_exec, git, spawn_agents, send_message
+VOR — персональный AI-секретарь с памятью, инструментами и голосовым вводом. Архитектура основана на Ouroboros (identity, scratchpad, tool loop).
 
-### Решённые проблемы
-- Кнопка AUTHENTICATE — HTML вынесен в `templates/index.html` (Jinja2)
-- Error 401 — добавлена загрузка `.env` в llm.py, проверка `check_api_keys.py`
-- Error 400 `annotations unsupported` — `_sanitize_messages()` в llm.py убирает неподдерживаемые поля для Groq
-- ConnectionResetError WinError 10054 — подавление в `_suppress_connection_reset` (web_server.py)
-- Брендинг: Ouroboros → VOR везде (UI, identity, BIBLE, README)
+### Реализованные фазы
+| Фаза | Описание |
+|------|----------|
+| 1 | Self-modification: git, shell |
+| 2 | Web search, browser |
+| 3 | Telegram bot |
+| 4 | Background consciousness |
+| 5 | Web UI (FastAPI, Jinja2) |
+| 6 | Multi-agent Swarm (spawn_agents) |
+| 7 | Voice (STT Groq Whisper, TTS pyttsx3) |
 
 ---
 
-## Архитектура
+## 2. Архитектура
 
 ```
-VOR Agent
+VOR/
+├── main.py              # CLI
+├── voice_cli.py         # Voice CLI
+├── web_server.py        # FastAPI, порт 8001
+├── telegram_bot.py      # aiogram 3.x
+├── config.py            # .env, пути
+├── check_api_keys.py    # Проверка ключей
+├── requirements.txt
+├── .env.example
+├── BIBLE.md             # Конституция агента
+├── data/
+│   ├── memory/          # identity.md, scratchpad.md
+│   ├── logs/            # chat.jsonl
+│   └── uploads/, files/
 ├── ouroboros/
-│   ├── agent.py       # Оркестратор, run() → loop
-│   ├── loop.py        # LLM + tool calls (ReAct)
-│   ├── llm.py         # Groq/OpenRouter/OpenAI, _sanitize_messages
-│   ├── context.py     # build_messages (identity, scratchpad)
-│   ├── memory.py      # scratchpad, identity, chat_history
-│   ├── swarm.py       # Multi-agent: Planner → Researcher/Coder/Critic
+│   ├── agent.py         # Оркестратор
+│   ├── loop.py          # LLM + tool loop
+│   ├── llm.py           # Groq/OpenRouter/OpenAI, _sanitize_messages
+│   ├── context.py       # build_messages
+│   ├── memory.py        # scratchpad, identity
+│   ├── background.py    # Background consciousness
+│   ├── swarm.py         # Multi-agent pipeline
+│   ├── voice.py         # STT, TTS, record
 │   └── tools/
-│       ├── registry.py    # ToolContext, ToolRegistry
-│       ├── core.py        # repo_read/list, data_read/list/write
-│       ├── control.py    # update_scratchpad, update_identity, send_message
-│       ├── git.py        # repo_edit, commit, push, status
-│       ├── shell.py      # shell_exec
-│       ├── search.py     # web_search
-│       ├── browser.py    # fetch_url, extract_links
-│       └── agents.py     # spawn_agents
-├── web_server.py     # FastAPI, порт 8001
-├── telegram_bot.py   # aiogram 3.x
-├── config.py         # .env, пути, ключи
-└── prompts/
-    └── SYSTEM.md     # Системный промпт
+│       ├── registry.py, core.py, control.py
+│       ├── git.py, shell.py, search.py, browser.py
+│       └── agents.py    # spawn_agents
+├── templates/index.html
+├── static/app.js
+├── prompts/SYSTEM.md
+└── deploy/
+    ├── vor-web.service
+    ├── vor-telegram.service
+    └── DEPLOY_COMMANDS.sh
 ```
 
 ---
 
-## Ключевые файлы
-
-| Файл | Назначение |
-|------|------------|
-| `config.py` | Загрузка .env, DATA_ROOT, ключи, WEB_PASSWORD |
-| `ouroboros/llm.py` | LLMClient, _sanitize_messages, provider/model |
-| `ouroboros/loop.py` | run_loop — chat + tool execution |
-| `ouroboros/agent.py` | Agent.run(), ToolContext(agent=self) |
-| `ouroboros/swarm.py` | Swarm.run(), SubTask, format_swarm_result |
-| `ouroboros/tools/agents.py` | spawn_agents → Swarm |
-| `web_server.py` | FastAPI, /api/chat, /api/voice/transcribe, /api/voice/speak, SSE |
-| `templates/index.html` | Jinja2, UI VOR |
-| `static/app.js` | Клиентский JS, tryLogin, sendMessage |
-| `data/memory/identity.md` | Идентичность VOR |
-| `BIBLE.md` | Конституция агента |
-
----
-
-## API ключи
-
-**Приоритет:** GROQ_API_KEY → OPENROUTER_API_KEY → OPENAI_API_KEY
-
-```powershell
-# Проверка
-python check_api_keys.py
-```
-
-**.env:**
-```
-GROQ_API_KEY=gsk_xxx
-OPENROUTER_API_KEY=sk-or-xxx   # опционально
-WEB_PASSWORD=vor
-```
-
----
-
-## Инструменты (18 шт)
+## 3. Инструменты (18 шт)
 
 | Инструмент | Описание |
 |------------|----------|
-| repo_read, repo_list | Чтение файлов репозитория |
+| repo_read, repo_list | Чтение репозитория |
 | data_read, data_list, data_write | Файлы в data/ |
 | repo_edit, repo_commit, repo_push, repo_status | Git |
-| shell_exec | Выполнение команд (timeout 60s) |
+| shell_exec | Команды (timeout 60s) |
 | web_search, fetch_url, extract_links | Веб |
 | update_scratchpad, update_identity | Память |
 | chat_history, send_message | Чат |
-| **spawn_agents** | Multi-agent pipeline для сложных задач |
-
-**Voice (Phase 7):** STT Groq Whisper, TTS pyttsx3, `voice_cli.py`, Web 🎤, Telegram voice
+| spawn_agents | Multi-agent: Planner → Researcher/Coder/Critic |
 
 ---
 
-## Быстрая проверка
+## 4. API ключи и .env
 
-```powershell
-cd "c:\Users\Admin\Desktop\COURSOR\Личный секретарь (AI)"
+**Приоритет LLM:** GROQ_API_KEY → OPENROUTER_API_KEY → OPENAI_API_KEY
 
-# Ключи
-python check_api_keys.py
+**Минимальный .env:**
+```
+GROQ_API_KEY=gsk_xxx
+WEB_PASSWORD=vor
+WEB_PORT=8001
+```
 
-# Web
-python web_server.py
-# → http://127.0.0.1:8001, пароль: vor
+**Для Telegram:**
+```
+TELEGRAM_BOT_TOKEN=xxx
+TELEGRAM_OWNER_CHAT_ID=xxx
+TELEGRAM_ALLOWED_USERS=123,456
+```
 
-# Telegram
-python telegram_bot.py
+**Для headless сервера:**
+```
+VOICE_TTS_ENABLED=false
 ```
 
 ---
 
-## Известные нюансы
+## 5. Деплой на сервер
 
-1. **Groq** — не поддерживает `annotations` в assistant messages → _sanitize_messages
-2. **Windows** — ConnectionResetError при закрытии вкладки SSE → подавление в exception handler
-3. **Папка ouroboros/** — имя пакета не меняли (рефакторинг импортов)
-4. **Порт 8001** — 8000 часто занят на Windows
+**Сервер:** 38.180.135.66 (v972912099)
+
+### Проблема: SSH Permission denied
+```
+ssh root@38.180.135.66
+Permission denied (publickey,password)
+```
+
+**Возможные причины:**
+1. Неверный пароль root
+2. Вход по паролю отключён (только SSH-ключи)
+3. Нужен другой пользователь (не root)
+
+**Решения:**
+- Проверить пароль в панели хостинга (VPS провайдер)
+- Добавить SSH-ключ в панели хостинга
+- Использовать веб-консоль провайдера (VNC/NoVNC) вместо SSH
+
+### Команды деплоя (после успешного SSH)
+
+```bash
+# 1. Клонирование
+cd ~
+git clone https://github.com/mihelson777/VOR.git vor
+cd vor
+
+# 2. Swap (если нет)
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# 3. Зависимости
+sudo apt update && sudo apt install -y python3 python3-pip python3-venv git ffmpeg
+
+# 4. Python
+python3 -m venv venv
+source venv/bin/activate
+sed -i 's/soundfile>=1.0.4/soundfile>=0.12.0/' requirements.txt
+pip install -r requirements.txt
+
+# 5. .env
+cp .env.example .env
+nano .env
+# Вставить GROQ_API_KEY, TELEGRAM_BOT_TOKEN и т.д.
+
+# 6. systemd
+sudo cp deploy/vor-web.service /etc/systemd/system/
+sudo cp deploy/vor-telegram.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable vor-web vor-telegram
+sudo systemctl start vor-web vor-telegram
+
+# 7. Firewall
+sudo ufw allow 8001/tcp
+sudo ufw allow 22/tcp
+sudo ufw --force enable
+```
+
+Проверка: http://38.180.135.66:8001
 
 ---
 
-## Рекомендации для Claude
+## 6. Известные проблемы и решения
 
-1. При добавлении новых полей в messages — проверять совместимость с Groq
-2. spawn_agents требует ctx.agent — ToolContext создаётся в agent.run()
-3. SYSTEM.md — добавить описание новых инструментов в таблицу Tools
-4. .env не коммитить — в .gitignore
+| Проблема | Решение |
+|----------|---------|
+| soundfile>=1.0.4 не найден | Заменить на soundfile>=0.12.0 |
+| Groq Error 400 annotations | _sanitize_messages() в llm.py |
+| tool_use_failed (failed_generation) | Retry в llm.chat(), улучшенные tool schemas, OUROBOROS_MODEL=qwen/qwen3-32b |
+| pyttsx3 на headless | VOICE_TTS_ENABLED=false |
+| SSH Permission denied | Панель хостинга, ключи, веб-консоль |
+| ConnectionResetError WinError 10054 | Подавление в web_server.py |
+| Git не в PATH (PowerShell) | Использовать Git Bash |
 
 ---
 
-## Окружение
+## 7. Запуск локально (Windows)
 
-- **OS:** Windows 10
-- **Python:** 3.14
-- **Браузер:** Chrome
+```powershell
+cd "c:\Users\Admin\Desktop\COURSOR\Личный секретарь (AI)"
+python check_api_keys.py
+python web_server.py
+# → http://127.0.0.1:8001, пароль: vor
+```
+
+---
+
+## 8. Рекомендации для Claude
+
+1. **messages** — при добавлении полей проверять совместимость с Groq
+2. **spawn_agents** — требует ctx.agent в ToolContext
+3. **SYSTEM.md** — обновлять таблицу Tools при новых инструментах
+4. **.env** — никогда не коммитить, только .env.example с плейсхолдерами
+5. **Деплой** — SSH доступ через панель хостинга, если пароль не работает
+
+---
+
+## 9. Окружение
+
+- **Локально:** Windows 10, Python 3.14, Chrome
+- **Сервер:** Ubuntu 22.04, Python 3.10
 - **Путь:** `c:\Users\Admin\Desktop\COURSOR\Личный секретарь (AI)`
