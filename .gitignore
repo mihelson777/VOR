@@ -1,0 +1,16 @@
+# Секреты — никогда не коммитить!
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+venv/
+.venv/
+
+# Data
+data/
+*.log

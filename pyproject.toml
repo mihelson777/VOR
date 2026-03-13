@@ -1,0 +1,9 @@
+[project]
+name = "personal-secretary"
+version = "0.1.0"
+description = "VOR — self-creating AI agent"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

@@ -1,0 +1,14 @@
+[Unit]
+Description=VOR Web Server
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/vor
+Environment=PATH=/root/vor/venv/bin
+ExecStart=/root/vor/venv/bin/python web_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

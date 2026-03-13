@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c0f;--bg2:#0d1318;--bg3:#111820;--border:#1a2832;--accent:#00d4aa;--accent2:#0099cc;--danger:#ff4466;--warn:#ffaa00;--text:#c8d8e0;--text2:#6a8898;--text3:#3a5060;--mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;--glow:0 0 20px rgba(0,212,170,0.15);--glow2:0 0 40px rgba(0,212,170,0.08)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;height:100vh;overflow:hidden;background-image:radial-gradient(ellipse at 20% 50%,rgba(0,212,170,0.03) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(0,153,204,0.03) 0%,transparent 60%)}
+#login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:100}
+.login-box{width:360px;border:1px solid var(--border);background:var(--bg2);padding:48px 40px;position:relative;box-shadow:var(--glow2)}
+.login-box::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent)}
+.login-logo{font-family:var(--mono);font-size:28px;color:var(--accent);text-align:center;margin-bottom:8px;letter-spacing:4px;text-shadow:0 0 30px rgba(0,212,170,0.5)}
+.login-sub{text-align:center;color:var(--text2);font-size:13px;margin-bottom:40px;letter-spacing:2px;text-transform:uppercase}
+.login-box input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:14px;padding:14px 16px;outline:none;letter-spacing:2px;transition:border-color 0.2s}
+.login-box input:focus{border-color:var(--accent)}
+.login-box button{width:100%;margin-top:16px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;padding:14px;cursor:pointer;transition:all 0.2s}
+.login-box button:hover{background:var(--accent);color:var(--bg);box-shadow:0 0 30px rgba(0,212,170,0.3)}
+.login-error{color:var(--danger);font-family:var(--mono);font-size:12px;text-align:center;margin-top:12px;min-height:16px}
+#app{display:none;height:100vh;grid-template-rows:48px 1fr;grid-template-columns:1fr 320px;grid-template-areas:"header header" "chat sidebar"}
+#app.visible{display:grid}
+header{grid-area:header;display:flex;align-items:center;padding:0 24px;border-bottom:1px solid var(--border);background:var(--bg2);gap:16px}
+.header-logo{font-family:var(--mono);font-size:16px;color:var(--accent);letter-spacing:3px;text-shadow:0 0 20px rgba(0,212,170,0.4)}
+.header-sep{flex:1}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);transition:background 0.3s,box-shadow 0.3s}
+.status-dot.online{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.status-label{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:1px;text-transform:uppercase}
+.btn-logout{background:none;border:1px solid var(--border);color:var(--text2);font-family:var(--mono);font-size:11px;padding:5px 12px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all 0.2s}
+.btn-logout:hover{border-color:var(--danger);color:var(--danger)}
+#chat-area{grid-area:chat;display:flex;flex-direction:column;overflow:hidden}
+#messages{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
+#messages::-webkit-scrollbar{width:4px}
+#messages::-webkit-scrollbar-track{background:transparent}
+#messages::-webkit-scrollbar-thumb{background:var(--border)}
+.msg{display:flex;flex-direction:column;max-width:80%;animation:fadeUp 0.3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.agent{align-self:flex-start;align-items:flex-start}
+.msg-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;color:var(--text3)}
+.msg.user .msg-label{color:var(--accent2)}
+.msg.agent .msg-label{color:var(--accent)}
+.msg-bubble{padding:12px 16px;font-family:var(--mono);font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.msg.user .msg-bubble{background:var(--bg3);border:1px solid var(--accent2);border-radius:2px 2px 0 2px;color:var(--text)}
+.msg.agent .msg-bubble{background:var(--bg2);border:1px solid var(--border);border-left:2px solid var(--accent);border-radius:0 2px 2px 2px;color:var(--text)}
+.msg-thinking .msg-bubble{color:var(--text2);border-left-color:var(--text3)}
+.thinking-dots span{animation:blink 1.2s infinite;font-size:18px;line-height:1}
+.thinking-dots span:nth-child(2){animation-delay:0.2s}
+.thinking-dots span:nth-child(3){animation-delay:0.4s}
+@keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
+#input-area{padding:16px 24px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:12px;align-items:flex-end}
+#msg-input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:12px 16px;outline:none;resize:none;min-height:44px;max-height:120px;transition:border-color 0.2s;line-height:1.6}
+#msg-input:focus{border-color:var(--accent)}
+#msg-input::placeholder{color:var(--text3)}
+#send-btn{background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:2px;padding:12px 20px;cursor:pointer;text-transform:uppercase;transition:all 0.2s;white-space:nowrap;height:44px}
+#send-btn:hover:not(:disabled){background:var(--accent);color:var(--bg);box-shadow:0 0 20px rgba(0,212,170,0.3)}
+#send-btn:disabled{opacity:0.3;cursor:not-allowed}
+#mic-btn{background:transparent;border:1px solid var(--border);color:var(--text2);font-size:18px;width:44px;height:44px;cursor:pointer;border-radius:4px;transition:all 0.2s}
+#mic-btn:hover{border-color:var(--accent);color:var(--accent)}
+#mic-btn.recording{background:var(--danger);border-color:var(--danger);color:white;animation:pulse 1s infinite}
+#sidebar{grid-area:sidebar;border-left:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--border)}
+.tab-btn{flex:1;padding:12px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-pane{display:none;flex:1;flex-direction:column;overflow:hidden}
+.tab-pane.active{display:flex}
+.memory-section{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:16px;gap:12px}
+.mem-label{font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.mem-editor{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:10px;resize:none;outline:none;line-height:1.6;min-height:80px;transition:border-color 0.2s}
+.mem-editor:focus{border-color:var(--accent)}
+.mem-save{background:none;border:1px solid var(--border);color:var(--text2);font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:6px 12px;cursor:pointer;align-self:flex-end;transition:all 0.2s}
+.mem-save:hover{border-color:var(--accent);color:var(--accent)}
+#log-list,#tool-list{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:3px;font-family:var(--mono);font-size:11px}
+#tool-list{gap:6px}
+.log-entry,.tool-entry{display:flex;gap:8px;line-height:1.5}
+.tool-entry{font-size:inherit;flex-direction:column;background:var(--bg3);border:1px solid var(--border);padding:8px 10px;animation:fadeUp 0.3s ease}
+.log-ts,.tool-ts{color:var(--text3);flex-shrink:0}
+.log-level{flex-shrink:0}
+.log-level.INFO{color:var(--accent2)}
+.log-level.ERROR{color:var(--danger)}
+.log-level.WARN{color:var(--warn)}
+.log-msg{color:var(--text2);word-break:break-all}
+.tool-header{display:flex;justify-content:space-between;margin-bottom:4px}
+.tool-name{font-size:12px;color:var(--accent)}
+.tool-status{font-size:10px}
+.tool-status.ok{color:var(--accent)}
+.tool-status.error{color:var(--danger)}
+.tool-result{font-size:11px;color:var(--text2);margin-top:2px;word-break:break-all}
+.empty-state{flex:1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;color:var(--text3);letter-spacing:2px}
+</style>
+</head>
+<body>
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">⬡ VOR</div>
+    <div class="login-sub">Personal AI Secretary</div>
+    <input type="password" id="pw-input" placeholder="ACCESS KEY" autocomplete="current-password">
+    <button type="button" id="login-btn">AUTHENTICATE</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+<div id="app">
+  <header>
+    <span class="header-logo">⬡ VOR</span>
+    <div class="header-sep"></div>
+    <div class="status-dot" id="status-dot"></div>
+    <span class="status-label" id="status-label">connecting</span>
+    <button class="btn-logout" id="logout-btn">LOGOUT</button>
+  </header>
+  <div id="chat-area">
+    <div id="messages">
+      <div class="msg agent">
+        <div class="msg-label">VOR</div>
+        <div class="msg-bubble">System online. I am VOR — your personal AI secretary.
+
+I have memory, tools, and initiative. How can I help?</div>
+      </div>
+    </div>
+    <div id="input-area">
+      <textarea id="msg-input" placeholder="Send a message..." rows="1"></textarea>
+      <button id="mic-btn" type="button" title="Voice input">🎤</button>
+      <button id="send-btn">SEND</button>
+    </div>
+  </div>
+  <div id="sidebar">
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" data-tab="memory">MEMORY</button>
+      <button class="tab-btn" data-tab="logs">LOGS</button>
+      <button class="tab-btn" data-tab="tools">TOOLS</button>
+    </div>
+    <div class="tab-pane active" id="tab-memory">
+      <div class="memory-section" style="flex:1;overflow-y:auto;gap:8px">
+        <div><div class="mem-label">Scratchpad</div><textarea class="mem-editor" id="scratchpad-editor" style="height:180px"></textarea><button class="mem-save" data-save="scratchpad">SAVE</button></div>
+        <div style="margin-top:8px"><div class="mem-label">Identity</div><textarea class="mem-editor" id="identity-editor" style="height:180px"></textarea><button class="mem-save" data-save="identity">SAVE</button></div>
+      </div>
+    </div>
+    <div class="tab-pane" id="tab-logs"><div id="log-list"><div class="empty-state">NO LOGS YET</div></div></div>
+    <div class="tab-pane" id="tab-tools"><div id="tool-list"><div class="empty-state">NO ACTIVITY YET</div></div></div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+<script>
+  window.addEventListener('error', function(e) {
+    var err = document.getElementById('login-error');
+    if (err && e.filename && e.filename.indexOf('app.js') >= 0) {
+      err.textContent = 'JS load failed. Try incognito or disable extensions.';
+    }
+  }, true);
+</script>
+</body>
+</html>
