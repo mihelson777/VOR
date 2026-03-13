@@ -74,18 +74,20 @@ VOR/
 | shell_exec | Команды (timeout 60s) |
 | web_search, fetch_url, extract_links | Веб |
 | update_scratchpad, update_identity | Память |
-| chat_history, send_message | Чат |
+| chat_history, send_message | Чат (send_message — в Telegram; fallback при "отправь в телеграм: X") |
 | spawn_agents | Multi-agent: Planner → Researcher/Coder/Critic |
 
 ---
 
 ## 4. API ключи и .env
 
-**Приоритет LLM:** GROQ_API_KEY → OPENROUTER_API_KEY → OPENAI_API_KEY
+**Приоритет LLM:** GROQ_API_KEY → OPENROUTER_API_KEY → OPENAI_API_KEY  
+**При 429 от Groq:** PREFER_OPENROUTER=1 — принудительно OpenRouter (модель qwen/qwen3-next-80b-a3b-instruct)
 
 **Минимальный .env:**
 ```
-GROQ_API_KEY=gsk_xxx
+PREFER_OPENROUTER=1
+OPENROUTER_API_KEY=sk-or-xxx
 WEB_PASSWORD=vor
 WEB_PORT=8001
 ```
@@ -94,7 +96,7 @@ WEB_PORT=8001
 ```
 TELEGRAM_BOT_TOKEN=xxx
 TELEGRAM_OWNER_CHAT_ID=xxx
-TELEGRAM_ALLOWED_USERS=123,456
+TELEGRAM_ALLOWED_USERS=702865794
 ```
 
 **Для headless сервера:**
@@ -177,6 +179,8 @@ sudo ufw --force enable
 | soundfile>=1.0.4 не найден | Заменить на soundfile>=0.12.0 |
 | Groq Error 400 annotations | _sanitize_messages() в llm.py |
 | tool_use_failed (failed_generation) | Retry в llm.chat(), улучшенные tool schemas, OUROBOROS_MODEL=qwen/qwen3-32b |
+| Groq 429 rate limit | PREFER_OPENROUTER=1, OPENROUTER_NO_GROQ_MODEL=qwen/qwen3-next-80b-a3b-instruct |
+| send_message не отправляет | Fallback в telegram_bot.py и web_server.py при "отправь в телеграм: X" |
 | pyttsx3 на headless | VOICE_TTS_ENABLED=false |
 | SSH Permission denied | Панель хостинга, ключи, веб-консоль |
 | ConnectionResetError WinError 10054 | Подавление в web_server.py |
@@ -195,17 +199,29 @@ python web_server.py
 
 ---
 
-## 8. Рекомендации для Claude
+## 8. Изменения (сессия 2026-03-13)
+
+- **context.py** — загрузка истории из chat.jsonl (последние 10 пар сообщений)
+- **llm.py** — PREFER_OPENROUTER, fallback на OpenRouter при 429, OPENROUTER_NO_GROQ_MODEL
+- **telegram_bot.py** — обработка send_message, fallback при "отправь в телеграм: X", "прямо сейчас отправь"
+- **web_server.py** — отправка send_message в Telegram владельцу, fallback
+- **identity.md** — Covenant (50% прибыли создателю), Capability Mindset (не отказываться)
+- **SYSTEM.md** — инструкции send_message, "никогда не отказываться"
+
+---
+
+## 9. Рекомендации для Claude
 
 1. **messages** — при добавлении полей проверять совместимость с Groq
 2. **spawn_agents** — требует ctx.agent в ToolContext
 3. **SYSTEM.md** — обновлять таблицу Tools при новых инструментах
 4. **.env** — никогда не коммитить, только .env.example с плейсхолдерами
 5. **Деплой** — SSH доступ через панель хостинга, если пароль не работает
+6. **Код на сервере** — git pull только после git push с локальной машины
 
 ---
 
-## 9. Окружение
+## 10. Окружение
 
 - **Локально:** Windows 10, Python 3.14, Chrome
 - **Сервер:** Ubuntu 22.04, Python 3.10
